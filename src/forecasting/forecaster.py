@@ -3,7 +3,12 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-from src.features.transforms import add_time_features
+from src.features.transforms import (
+    add_lag_features,
+    add_ratio_features,
+    add_rolling_features,
+    add_time_features,
+)
 from src.forecasting.ensemble import EnsembleForecaster
 from src.forecasting.lightgbm_model import LightGBMQuantileForecaster
 from src.forecasting.seasonal_naive import SeasonalNaiveForecaster
@@ -96,17 +101,21 @@ class Forecaster:
                 sn_array = np.tile(sn_preds.reshape(-1, 1), (1, 3))
                 combined = self._ensemble.combine(lgb_preds, sn_array)
 
-                points = [
-                    ForecastPoint(
-                        date=horizon_dates[i].date(),
-                        values=QuantileValue(
-                            p10=float(combined[i, 0]),
-                            p50=float(combined[i, 1]),
-                            p90=float(combined[i, 2]),
-                        ),
+                points = []
+                for i in range(h):
+                    row = combined[i]
+                    sorted_ = np.sort(row)
+                    sorted_ = np.maximum(sorted_, 0.0)
+                    points.append(
+                        ForecastPoint(
+                            date=horizon_dates[i].date(),
+                            values=QuantileValue(
+                                p10=float(sorted_[0]),
+                                p50=float(sorted_[1]),
+                                p90=float(sorted_[2]),
+                            ),
+                        )
                     )
-                    for i in range(h)
-                ]
 
                 series_list.append(
                     ForecastSeries(
@@ -141,22 +150,41 @@ class Forecaster:
         campaign_group: pd.DataFrame,
         future_dates: pd.DatetimeIndex,
     ) -> pd.DataFrame:
-        """Build a feature DataFrame for future dates for one campaign.
+        """Build a feature DataFrame for future dates by recomputing
+        features over the extended history (historical + flat future).
 
-        Time features are computed from the future dates. All other
-        features (ratios, rolling, lag) are forward-filled from the
-        last known observation of this campaign.
+        Raw metrics are forward-filled from the last observation, then
+        all transforms (time, ratio, rolling, lag) are reapplied so
+        that derived features evolve across the forecast horizon.
         """
-        last_row = campaign_group.iloc[-1:].copy()
-        last_row_non_time = last_row.drop(columns=["date"], errors="ignore")
+        base_cols = [
+            "date", "channel", "campaign_id", "campaign_name",
+            "campaign_type", "spend", "revenue", "clicks",
+            "impressions", "conversions", "daily_budget",
+        ]
+        present_cols = [c for c in base_cols if c in campaign_group.columns]
+
+        last_row = campaign_group.iloc[-1:][present_cols].copy()
 
         future = pd.DataFrame({"date": future_dates})
-        for col in last_row_non_time.columns:
-            future[col] = last_row_non_time[col].iloc[0]
+        for col in present_cols:
+            if col == "date":
+                continue
+            future[col] = last_row[col].iloc[0]
 
-        future = add_time_features(future)
+        combined = pd.concat([campaign_group[present_cols], future], ignore_index=True)
 
-        return future
+        combined = add_time_features(combined)
+        combined = add_ratio_features(combined)
+        combined = add_rolling_features(
+            combined, windows=self._config.get("features.rolling_windows", [7, 14, 30])
+        )
+        combined = add_lag_features(
+            combined, lags=self._config.get("features.lag_windows", [1, 7, 14, 30])
+        )
+
+        future_start = len(campaign_group)
+        return combined.iloc[future_start:].reset_index(drop=True)
 
     def get_lgb_model(self) -> LightGBMQuantileForecaster:
         return self._lgb
