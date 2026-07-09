@@ -1,0 +1,11 @@
+{
+  "experiment": "exp06_failure_analysis",
+  "total_predictions": 2259,
+  "overall_rmse": 771.89,
+  "overall_mae": 395.57,
+  "worst_campaign": "google_18253990962",
+  "worst_campaign_rmse": 1665.36,
+  "best_campaign": "google_20437094522",
+  "best_campaign_rmse": 0.0,
+  "rmse_degradation_30_to_90": 0.0
+}

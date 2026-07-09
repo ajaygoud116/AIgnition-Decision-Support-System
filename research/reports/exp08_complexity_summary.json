@@ -1,0 +1,11 @@
+{
+  "experiment": "exp08_complexity_evaluation",
+  "lightgbm_train_s": 4.7316,
+  "lightgbm_infer_ms_per_row": 0.1049,
+  "lightgbm_memory_mb": 4.97,
+  "seasonal_naive_infer_ms_per_row": 0.0037,
+  "ensemble_train_s": 4.7616,
+  "ensemble_infer_ms_per_row": 0.0593,
+  "n_features": 82,
+  "n_campaigns": 131
+}

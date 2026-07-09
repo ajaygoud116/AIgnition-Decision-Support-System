@@ -1,0 +1,43 @@
+project:
+  name: "aignition-forecasting"
+  random_seed: 42
+
+forecast:
+  horizons: [30, 60, 90]
+  quantiles: [0.1, 0.5, 0.9]
+  min_history_days: 30
+  lookback_window: 90
+
+features:
+  rolling_windows: [7, 14, 30]
+  lag_windows: [1, 7, 14, 30]
+  max_na_ratio: 0.3
+
+validation:
+  max_missing_ratio: 0.3
+  max_future_days: 7
+  max_duplicate_ratio: 0.05
+  valid_campaign_types:
+    google: ["SEARCH", "PERFORMANCE_MAX", "DISPLAY", "VIDEO", "DEMAND_GEN", "SHOPPING"]
+    meta: ["Generic", "Prospecting", "Remarketing"]
+    bing: ["Search", "PerformanceMax", "Audience", "Shopping"]
+
+simulation:
+  max_adjustments_per_run: 10
+
+decision:
+  min_roas_target: 3.0
+  volatility_threshold: 0.5
+  diminishing_returns_periods: 3
+  cost_inflation_threshold: 0.2
+  concentration_threshold: 0.6
+  zero_revenue_threshold_days: 45
+
+report:
+  include_raw_forecasts: false
+  decimal_places: 2
+  output_format: "csv"
+
+logging:
+  level: "INFO"
+  format: "json"

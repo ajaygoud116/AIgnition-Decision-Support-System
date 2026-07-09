@@ -1,0 +1,9 @@
+{
+  "experiment": "exp07_optimization_validation",
+  "best_utility_strategy": "equal",
+  "optimizer_utility": 267650094503.5,
+  "current_utility": 477784654665.44,
+  "optimizer_improvement_pct": -43.98,
+  "optimizer_beats_equal": "False",
+  "optimizer_beats_greedy": "True"
+}

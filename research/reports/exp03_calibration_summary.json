@@ -1,0 +1,7 @@
+{
+  "experiment": "exp03_uncertainty_calibration",
+  "empirical_coverage_80pct": 0.479,
+  "calibration_well_calibrated": false,
+  "model_interval_width": 1.4262,
+  "true_interval_width": 2.3411
+}

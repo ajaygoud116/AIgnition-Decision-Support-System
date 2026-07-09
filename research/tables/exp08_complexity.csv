@@ -1,0 +1,4 @@
+model,train_time_s,infer_time_s,infer_time_ms_per_row,peak_memory_fit_mb,peak_memory_pred_mb,n_features,n_rows_train,n_rows_predict
+lightgbm,4.7316,0.0283,0.1049,4.97,0.46,82,1112,270
+seasonal_naive,0.03,0.001,0.0037,1.56,0.0,0,1112,270
+ensemble,4.7616,0.016,0.0593,6.52,0.0,82,1112,270

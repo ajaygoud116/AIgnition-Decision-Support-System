@@ -1,0 +1,5 @@
+model,expected_revenue,expected_roas,risk_score,budget_efficiency
+current,11040561.39,5.096,2.4063,4.5138
+uniform,8462698.26,3.9061,0.0,3.8765
+proportional,11040561.39,5.096,2.4063,4.5138
+optimizer,5531531.56,2.5532,2.4013,2.3985
