@@ -4,7 +4,7 @@
 [![Tests](https://img.shields.io/badge/tests-309%2F309-passing-green.svg)]()
 [![Pipeline](https://img.shields.io/badge/pipeline-5%20min%2F102%20campaigns-success.svg)]()
 
-Evidence-driven decision support for multi-channel marketing budget allocation. Forecast 102 campaigns with calibrated uncertainty bounds, simulate budget scenarios using an explicit economic model, and get per-campaign recommendations — all in under 5 minutes.
+Evidence-driven decision support for multi-channel marketing budget allocation. Forecast 102 campaigns with calibrated uncertainty bounds, simulate budget scenarios using an explicit economic model, and get per-campaign recommendations
 
 ---
 
@@ -314,41 +314,3 @@ Edit `config.yaml`:
 
 ---
 
-## Final Verdict
-
-**1. What hypothesis did this project originally make?**
-
-That a machine learning model trained on observational marketing data could learn a reliable budget-to-revenue response function, enabling budget-conditional revenue forecasting.
-
-**2. Which hypotheses were disproved?**
-
-The strong causal hypothesis was disproved. The model does not learn a meaningful budget-to-revenue relationship from observational data. Budget features rank near the bottom of feature importance. Campaign-level elasticity estimates are weak or negative.
-
-**3. Which hypotheses survived experimentation?**
-
-- Quantile regression on time-series features produces reasonable baseline revenue forecasts (RMSE ~576).
-- Conformal calibration corrects severe interval overconfidence (13.6% → 80.3% coverage).
-- An explicit economic simulation model can substitute for learned causal responses.
-- The 7-stage pipeline is computationally feasible (under 5 minutes for 102 campaigns).
-
-**4. What new scientific understanding emerged?**
-
-The most valuable insight is negative but important: **observational ad spend data does not support causal budget-to-revenue learning, and a scientifically defensible decision support system must explicitly separate forecasting from simulation.** Attempting to learn budget elasticity from observational data and presenting it as a reliable basis for budget decisions would be misleading. The correct architecture acknowledges this limitation and routes around it.
-
-**5. What is the strongest evidence supporting the final architecture?**
-
-The calibration result: raw intervals cover 13.6% of actuals. After conformal calibration, they cover 80.35% (matching the 80% target). This is not a promotional claim — it is an honest diagnostic. The α=8.78 factor quantifies exactly how overconfident the raw model is. This is the kind of evidence that survives hostile review.
-
-**6. What should judges remember after the presentation?**
-
-We built a decision support system, not a black-box predictor. We found that the data cannot support causal budget claims, so we separated forecasting from simulation. We calibrated our uncertainty and disclosed the result (13.6% → 80.3%). We tested every claim experimentally and removed everything that failed. What remains is scientifically defensible.
-
----
-
-## License
-
-Hackathon submission — not for commercial use.
-
----
-
-*AIgnition: Decisions with Certainty.*
