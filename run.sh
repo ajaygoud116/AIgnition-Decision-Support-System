@@ -13,9 +13,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-DATA_DIR="${1:?Usage: $0 DATA_DIR MODEL_PATH OUTPUT_PATH}"
-MODEL_PATH="${2:?Usage: $0 DATA_DIR MODEL_PATH OUTPUT_PATH}"
-OUTPUT_PATH="${3:?Usage: $0 DATA_DIR MODEL_PATH OUTPUT_PATH}"
+DATA_DIR="${1:-./data}"
+MODEL_PATH="${2:-./pickle/model.pkl}"
+OUTPUT_PATH="${3:-./output/predictions.csv}"
 
 OUTPUT_DIR="$(dirname "$OUTPUT_PATH")"
 mkdir -p "$OUTPUT_DIR"
