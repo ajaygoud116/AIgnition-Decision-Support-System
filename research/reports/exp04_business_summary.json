@@ -1,7 +1,0 @@
-{
-  "experiment": "exp04_business_evaluation",
-  "best_revenue_strategy": "current",
-  "best_roas_strategy": "current",
-  "best_efficiency_strategy": "current",
-  "optimizer_revenue_uplift_pct": -49.9
-}

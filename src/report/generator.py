@@ -70,7 +70,7 @@ class ReportGenerator:
                     "p90": round(point.values.p90, self._decimal_places),
                 })
         pdf = pd.DataFrame(rows, columns=["entity_id", "channel", "horizon", "metric", "date", "p10", "p50", "p90"])
-        pdf.to_csv(output_dir / "predictions.csv", index=False)
+        pdf.to_csv(output_dir / "forecasts.csv", index=False)
 
     def _write_uncertainty(
         self, uncertainty_report: UncertaintyReport, output_dir: Path

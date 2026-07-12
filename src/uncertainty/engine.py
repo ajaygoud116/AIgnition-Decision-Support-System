@@ -7,10 +7,14 @@ from src.models.common import ForecastResult
 from src.uncertainty.metrics import (
     aggregate_entities,
     compute_horizon_breakdown,
+    compute_interval_widths,
+    compute_nonconformity_scores,
     compute_relative_widths,
     compute_stability_trend,
     compute_volatility,
     confidence_from_relative_width,
+    find_calibration_quantile,
+    pair_forecast_with_actuals,
 )
 from src.uncertainty.models import ChannelUncertainty, EntityUncertainty, UncertaintyReport
 from src.utils.config import Config
@@ -20,14 +24,14 @@ from src.utils.logger import StructuredLogger
 class UncertaintyEngine:
     """Computes uncertainty metrics from a ForecastResult.
 
-    Each ForecastSeries (entity_id × horizon) produces per-point widths,
+    Each ForecastSeries (entity_id x horizon) produces per-point widths,
     relative widths, confidence, volatility, and stability trend.  These
     are aggregated by entity (campaign) and channel, and assembled into
     an UncertaintyReport that the decision layer consumes.
 
-    Supports conformal calibration: call calibrate() with a held-out
-    forecast + actuals to compute a scaling factor that adjusts interval
-    widths to achieve target coverage.
+    Conformal calibration: call calibrate() with a held-out forecast +
+    actuals to compute a scaling factor that adjusts interval widths so
+    that empirical coverage matches the target (default 80%).
     """
 
     def __init__(self, config: Config):
@@ -35,44 +39,35 @@ class UncertaintyEngine:
         self._logger = StructuredLogger("uncertainty.engine")
         self._threshold = config.get("uncertainty.relative_width_threshold", 2.0)
         self._volatility_threshold = config.get("decision.volatility_threshold", 0.5)
-        self._calibration_factor: Optional[float] = None
+        self._target_coverage = config.get("uncertainty.target_coverage", 0.80)
+        self._calibration_alpha: Optional[float] = None
 
     def calibrate(
         self,
         forecast_result: ForecastResult,
         actuals_df: pd.DataFrame,
     ) -> float:
-        """Conformal calibration via bisection.
+        """Split-conformal calibration of prediction intervals.
 
-        Finds a scaling factor α such that the empirical coverage of
-        the adjusted intervals [p50 - α*(p50-p10), p50 + α*(p90-p50)]
-        matches the target coverage.
+        Steps:
+          1. Align every forecast point with its actual value.
+          2. Compute nonconformity scores a = how much the interval
+             must expand to cover the actual.
+          3. Find the q-th quantile of scores where
+             q = ceil((n+1) * target_coverage) / n  (finite-sample correction).
+          4. Store the calibration factor alpha = q.
+
+        The scaled interval for future predictions becomes:
+          [p50 - alpha*(p50-p10),  p50 + alpha*(p90-p50)]
 
         Args:
             forecast_result: ForecastResult for the calibration period.
             actuals_df: DataFrame with columns [date, campaign_id, revenue].
 
         Returns:
-            Calibration factor α.
+            Calibration factor alpha.
         """
-        target = self._config.get("uncertainty.target_coverage", 0.80)
-
-        pairs = []
-        for series in forecast_result.series:
-            eid = series.entity_id
-            for point in series.points:
-                mask = (
-                    (actuals_df["campaign_id"] == eid)
-                    & (actuals_df["date"] == pd.Timestamp(point.date))
-                )
-                match = actuals_df.loc[mask]
-                if len(match) > 0:
-                    pairs.append({
-                        "actual": match["revenue"].values[0],
-                        "p10": point.values.p10,
-                        "p50": point.values.p50,
-                        "p90": point.values.p90,
-                    })
+        pairs = pair_forecast_with_actuals(forecast_result, actuals_df)
 
         if len(pairs) < 10:
             self._logger.warning(
@@ -80,64 +75,64 @@ class UncertaintyEngine:
                 pairs=len(pairs),
                 min_required=10,
             )
-            self._calibration_factor = 1.0
+            self._calibration_alpha = 1.0
             return 1.0
 
-        def _empirical_coverage(alpha: float) -> float:
-            inside = 0
-            for p in pairs:
-                lo = p["p50"] - alpha * (p["p50"] - p["p10"])
-                hi = p["p50"] + alpha * (p["p90"] - p["p50"])
-                if lo <= p["actual"] <= hi:
-                    inside += 1
-            return inside / len(pairs)
+        scores = compute_nonconformity_scores(pairs)
+        self._calibration_alpha = find_calibration_quantile(scores, self._target_coverage)
 
-        lo, hi = 0.1, 5.0
-        for _ in range(50):
-            mid = (lo + hi) / 2.0
-            if _empirical_coverage(mid) < target:
-                lo = mid
-            else:
-                hi = mid
+        # Compute achieved coverage on calibration set
+        from src.uncertainty.metrics import apply_calibration
+        stats = apply_calibration(pairs, self._calibration_alpha)
 
-        self._calibration_factor = (lo + hi) / 2.0
-        achieved = _empirical_coverage(self._calibration_factor)
         self._logger.info(
             "calibration_complete",
-            factor=round(self._calibration_factor, 4),
-            target_coverage=target,
-            achieved_coverage=round(achieved, 4),
-            n_pairs=len(pairs),
+            alpha=round(self._calibration_alpha, 4),
+            target_coverage=self._target_coverage,
+            achieved_coverage=round(stats["coverage"], 4),
+            n_pairs=stats["n_pairs"],
+            n_inside=stats["inside"],
         )
-        return self._calibration_factor
+        return self._calibration_alpha
 
     def compute(self, forecast_result: ForecastResult) -> UncertaintyReport:
-        """Produce an UncertaintyReport from a ForecastResult."""
+        """Produce an UncertaintyReport from a ForecastResult.
+
+        If calibrate() has been called, the calibration factor is applied
+        to scale interval widths before computing confidence scores.
+        """
         self._logger.info(
             "uncertainty_compute_start",
             series=len(forecast_result.series),
         )
 
         entity_map: Dict[str, List[EntityUncertainty]] = {}
+        alpha = self._calibration_alpha if self._calibration_alpha is not None else 1.0
 
         for series in forecast_result.series:
             eid = series.entity_id
+            raw_widths = compute_interval_widths(series)
             rel_widths = compute_relative_widths(series)
-            if self._calibration_factor is not None:
-                rel_widths = rel_widths * self._calibration_factor
-            confidence = confidence_from_relative_width(rel_widths, self._threshold)
-            volatility = compute_volatility(rel_widths)
+
+            # Apply calibration: scale interval widths
+            calibrated_widths = raw_widths * alpha
+            calibrated_rel = rel_widths * alpha
+
+            confidence = confidence_from_relative_width(calibrated_rel, self._threshold)
+            volatility = compute_volatility(calibrated_rel)
             trend = compute_stability_trend(series)
             breakdown = compute_horizon_breakdown(series)
 
             entity_unc = EntityUncertainty(
                 entity_id=eid,
                 channel=series.channel,
-                avg_interval_width=float(rel_widths.mean()),
-                avg_relative_width=float(rel_widths.mean()),
+                avg_interval_width=float(calibrated_widths.mean()),
+                avg_relative_width=float(calibrated_rel.mean()),
                 confidence_score=confidence,
                 volatility=volatility,
                 stability_trend=trend,
+                calibrated_coverage=self._target_coverage,
+                calibration_alpha=alpha,
                 horizon_breakdown={
                     str(series.horizon.value): breakdown.get("late", 0.0),
                 },
@@ -155,9 +150,11 @@ class UncertaintyEngine:
             overall_volatility=overall_volatility,
             high_uncertainty_count=high_count,
             metadata={
-                "model": "uncertainty_engine_v1",
+                "model": "uncertainty_engine_v2",
                 "relative_width_threshold": self._threshold,
                 "volatility_threshold": self._volatility_threshold,
+                "target_coverage": self._target_coverage,
+                "calibration_alpha": alpha,
             },
         )
 
@@ -166,6 +163,7 @@ class UncertaintyEngine:
             entities=len(entities),
             channels=len(channels),
             high_uncertainty=high_count,
+            calibration_alpha=round(alpha, 4),
         )
         return report
 
@@ -190,6 +188,12 @@ class UncertaintyEngine:
                     ),
                     volatility=float(sum(u.volatility for u in uncs) / len(uncs)),
                     stability_trend=uncs[0].stability_trend,
+                    calibrated_coverage=float(
+                        sum(u.calibrated_coverage for u in uncs) / len(uncs)
+                    ),
+                    calibration_alpha=float(
+                        sum(u.calibration_alpha for u in uncs) / len(uncs)
+                    ),
                     horizon_breakdown={
                         k: v for u in uncs for k, v in u.horizon_breakdown.items()
                     },

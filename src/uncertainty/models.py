@@ -11,6 +11,8 @@ class EntityUncertainty:
     confidence_score: float
     volatility: float
     stability_trend: str  # "narrowing", "stable", "widening"
+    calibrated_coverage: float = 0.0
+    calibration_alpha: float = 1.0
     horizon_breakdown: Dict[str, float] = field(default_factory=dict)
 
 

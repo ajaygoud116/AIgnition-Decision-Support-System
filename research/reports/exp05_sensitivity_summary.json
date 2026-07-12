@@ -1,7 +1,0 @@
-{
-  "experiment": "exp05_sensitivity_analysis",
-  "baseline_rmse": 696.31,
-  "most_robust_scenario": "missing_30pct",
-  "most_sensitive_scenario": "concept_drift",
-  "max_degradation_pct": 361.47
-}
