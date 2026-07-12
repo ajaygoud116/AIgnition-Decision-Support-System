@@ -41,7 +41,7 @@ class LightGBMQuantileForecaster:
         self._feature_columns = [c for c in df.columns if c not in self._base_columns(df)]
         self._feature_columns = [c for c in self._feature_columns if c != target_col]
 
-        X = df[self._feature_columns].values
+        X = df.loc[:, self._feature_columns]
         y = df[target_col].values
 
         self._logger.info(
@@ -67,7 +67,7 @@ class LightGBMQuantileForecaster:
 
         The caller must ensure df contains self._feature_columns.
         """
-        X = df[self._feature_columns].values
+        X = df.loc[:, self._feature_columns]
         results = np.column_stack([self._models[q].predict(X) for q in self._quantiles])
         return results
 
